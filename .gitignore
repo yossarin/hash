@@ -1,0 +1,12 @@
+*.swo
+*.swn
+*.hi
+*.o
+*.ghci
+*.swp
+*~
+.cabal-sandbox/
+cabal.sandbox.config
+*.vim
+dist
+res*.txt
