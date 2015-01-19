@@ -3,12 +3,11 @@ module Hash.Parsing.HashParser where
 import Hash.Language.Expressions
 import Text.Parsec.Expr
 import Text.Parsec.String (Parser)
-import Text.Parsec.Char (string, oneOf, noneOf, digit, char, letter, spaces, alphaNum)
-import Text.Parsec (parse, ParseError, try, optionMaybe, option, choice, skipMany1)
-import Text.Parsec.Combinator (many1, sepBy1, between)
+import Text.Parsec.Char (string, oneOf, noneOf, digit, char, letter, spaces, alphaNum, newline, anyChar)
+import Text.Parsec (parse, ParseError, try, optionMaybe, option, choice, skipMany1, skipMany)
+import Text.Parsec.Combinator (many1, sepBy1, between, manyTill)
 import Control.Applicative ((<$>), (<$), (<*>), (<*), (*>), (<|>), Applicative, many)
 import Data.Char (digitToInt)
-import Control.Monad (liftM)
 
 err = "An error has occurred"
 
@@ -38,13 +37,20 @@ integer = number <|> negative
 token :: Parser a -> Parser a
 token = (<* spaces)
 
--- Applicative of this parser disregards prepending spaces
+-- Application of this parser disregards prepending spaces
 sp :: Parser a -> Parser a
 sp = (spaces *>)
 
 -- Parses a single character
 symbol :: Char -> Parser Char
 symbol = token . char
+
+-- Comment parser
+comment :: Parser String 
+comment = do
+  char '#'
+  comment <- (manyTill anyChar newline)
+  return ""
 
 -- Function that parses the string using a given parser.
 -- Disregardnig leading spaces.
@@ -73,9 +79,11 @@ stringLiteral = Str <$> (char '"' *> many (noneOf "\"") <* char '"')
 expression :: Parser Expr
 expression = try stringOfChars <|> stringLiteral <|> variable 
 
+texpr = token expression
+
 -- Parses the assignemt to a variabl
 assignment :: Parser Cmd
-assignment = Assign <$> (token $ variable) <*> (symbol '=' *> expression)
+assignment = Assign <$> (token $ variable) <*> (symbol '=' *> expression) <* symbol ';'
 
 -- Parsing the input redirect
 input :: Parser (Maybe Expr)
@@ -86,36 +94,21 @@ output :: Parser (Maybe Expr)
 output = optionMaybe $ symbol '>' *> (token expression)
 
 -- Parsing the output append
-outputAppend :: Parser Expr
-outputAppend = symbol '>' *> char '>'  *> (token expression)
+outputAppend :: Parser (Maybe Expr)
+outputAppend = optionMaybe $ string ">>" *> spaces *> (token expression)
 
--- Parsing the command (non appending)
-commandNonAppending :: Parser Cmd
-commandNonAppending = do
-  cmdName <- expression
-  spaces
-  cmdArgs <- many $ token expression
-  spaces
-  i       <- input
-  spaces
-  o       <- output
-  return $ Cmd cmdName cmdArgs i o False
+applyBool :: Bool -> (Bool -> Cmd) -> Cmd
+applyBool b f = f b
 
--- Parsing the command (appending)
-commandAppending :: Parser Cmd
-commandAppending = do
-  cmdName <- expression
-  spaces
-  cmdArgs <- many $ token expression
-  spaces
-  i       <- input
-  spaces
-  o       <- outputAppend
-  return $ Cmd cmdName cmdArgs i (Just o) True
+-- Parse non appending command
+commandNonAppending = (applyBool False) <$> (Cmd <$> texpr <*> (many texpr) <*> input <*> output <* symbol ';')
+
+-- Parse appending commmand
+commandAppending = (applyBool True) <$> (Cmd <$> texpr <*> (many texpr) <*> input <*> outputAppend <* symbol ';')
 
 -- Cmd parser (if there is no output redirect it defaults to non-appending)
 command :: Parser Cmd
-command = try commandAppending <|> commandNonAppending
+command = try commandNonAppending <|> commandAppending
 
 -- Parser for command or assigment
 cmd :: Parser Cmd
@@ -151,14 +144,18 @@ predicates = buildExpressionParser table other
         rootCase    = Pred <$> (token $ comp)
         parenthases = Parens <$> (char '(' *> spaces *> predicates <* char ')' <* spaces)
 
--- If parser
-
--- If-Else parser
-ifparser :: Parser Conditional
-ifparser = If <$> (string "if" *> sp predicates) <*> (sp $ string "then" *> (sp $ char '{') *> many (sp cmd <* char ';' <* spaces) <* (sp $ char '}'))
+-- If prser
+ifParser :: Parser Conditional
+ifParser = If <$> (string "if" *> sp predicates) <*> (sp $ string "then" *> spaces *> symbol '{' *> many (sp cmd) <* spaces <* symbol '}')
 
 -- If-Then-Else parser
+ifThenElseParser :: Parser Conditional
+ifThenElseParser = IfElse <$> (string "if" *> sp predicates) <*> (sp $ string "then" *> spaces *> symbol '{' *> many (sp cmd) <* spaces <* symbol '}' <* string "else" <* spaces <* symbol '{' ) <*> (many (sp cmd) <* spaces <* symbol '}')
 
--- While loop parser
+-- Conditional branch parser
+cbp :: Parser Conditional
+cbp = try ifThenElseParser <|> ifParser
 
--- TLExpr parser
+-- TLExpr parser, tries to parse a comment, conditional branch or a command
+tle :: Parser TLExpr
+tle = (skipMany (token comment)) *> (try (TLCnd <$> cbp) <|> (TLCmd <$> cmd)) <* (skipMany (token comment))

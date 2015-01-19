@@ -1,5 +1,6 @@
 *.swo
 *.swn
+*.swm
 *.hi
 *.o
 *.ghci
