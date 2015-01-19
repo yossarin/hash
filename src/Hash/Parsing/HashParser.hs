@@ -63,12 +63,16 @@ integer' = token integer
 
 -- Parsing a string of characters
 stringOfChars :: Parser Expr
-stringOfChars = Str <$> (token . many1 $ noneOf "\n\" <>[]{}();")
+stringOfChars = Str <$> (token . many1 $ noneOf "\n\" $<>[]{}();")
 
 -- Parsing the variable name, first character must be a letter,
 -- the rest can be alphaNum
 variable :: Parser Expr 
 variable = Var <$> letter <:> many alphaNum
+
+-- Parsing a reference to a variable (reference to a variable a is $a)
+refToVar :: Parser Expr
+refToVar = Var <$> (char '$' *> (token $ letter <:> many alphaNum))
 
 -- Parses content between double quotes
 stringLiteral :: Parser Expr
@@ -77,8 +81,9 @@ stringLiteral = Str <$> (char '"' *> many (noneOf "\"") <* char '"')
 -- Parses either a variable name, string of characters or 
 -- string snclosed in "double quotes"
 expression :: Parser Expr
-expression = try stringOfChars <|> stringLiteral <|> variable 
+expression = try stringOfChars <|> stringLiteral <|> variable <|> refToVar
 
+-- Tokenizes the expression
 texpr = token expression
 
 -- Parses the assignemt to a variabl
