@@ -7,10 +7,20 @@ import System.IO (hFlush, stdout)
 import Hash.Language.Exec
 import Hash.Language.Commands
 import Hash.Parsing.HashParser (parseToTLExpr) 
-import System.Directory (getCurrentDirectory)
+import System.Directory (getCurrentDirectory, getHomeDirectory, doesFileExist)
 import qualified Data.Map as M
 import Control.Exception
 import Data.Char (isSpace)
+
+-- Get $HOME/.hashrc if exists
+getHashRc :: IO String
+getHashRc = do
+  hd <- getHomeDirectory
+  let hashrcPath = hd ++ "/.hashrc"
+  hashrcExists <- doesFileExist hashrcPath
+  if hashrcExists then do
+    readFile hashrcPath
+  else return ""
 
 -- The top-level module. Connects parsing to execution and adds interaction
 -- with the user / reading from file.
@@ -18,7 +28,9 @@ import Data.Char (isSpace)
 runScript :: FilePath -> IO ()
 runScript fp = do
   file <- readFile fp
-  let parsedFile = parseToTLExpr file
+  hashrc <- getHashRc
+
+  let parsedFile = parseToTLExpr (hashrc ++ file)
   wd <- getCurrentDirectory
   runHashProgram commands (Left wd) parsedFile
   return ()
@@ -26,8 +38,12 @@ runScript fp = do
 -- Communicates with the user and performs hash commands line by line
 runInteractive :: IO ()
 runInteractive = do
+  hashrc <- getHashRc
+  
+  let parsedFile = parseToTLExpr hashrc
   currentDir <- getCurrentDirectory
-  repl (ScriptState {output = "", wd = currentDir, vartable = M.empty}) "hash-0.1> "
+  ss <- runHashProgram commands (Left currentDir) parsedFile
+  repl ss "hash-0.1> "
 
 -- flushStr prints out a string and immediately flushes the stream
 flushStr :: String -> IO ()

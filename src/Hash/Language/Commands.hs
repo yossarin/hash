@@ -5,6 +5,9 @@ import Hash.Language.Exec
 import System.Directory
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
+import Data.Char (toLower)
+import Data.ByteString.Char8 (pack)
+import Hexdump (prettyHex)
 
 -- A map of (command name, command pairs), used to abstract command
 -- execution and make adding new commands relatively easy
@@ -19,6 +22,7 @@ commands = M.fromList [ ("pwd",    pwd)
                       , ("rmdir",  rmdir)
                       , ("cat",    cat)
                       , ("echo",   echo)
+                      , ("hexdump", hexdump)
                       ]
 
 {-
@@ -165,3 +169,24 @@ interpolate vt s  acc = interpolate vt rest (acc ++ pre ++ val)
 -- Returns value of a variable or empty string
 lookupVar :: VarTable -> String -> String
 lookupVar vt v = fromMaybe "" $ M.lookup v vt
+
+{-
+  A basic grep command that matches lines containing a given string literal.
+  It supports the -v, -i, -o, -n and -c flags.
+  TODO
+-}
+
+{-
+  hexdump, a command that, given a file, prints out its byte contents
+  as hexadecimal numbers.
+-}
+
+hexdump :: Command
+hexdump args ss = do
+  let out = output ss
+  
+  if out /= "" then do  
+    return $ ss { output = prettyHex $ pack out }
+  else do
+    file <- readFile $ head args
+    return $ ss { output = prettyHex $ pack file }
