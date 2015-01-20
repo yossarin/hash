@@ -1,4 +1,6 @@
-module Hash.Parsing.HashParser where
+module Hash.Parsing.HashParser
+  ( parseToTLExpr )
+  where
 
 import Hash.Language.Expressions
 import Text.Parsec.Expr
@@ -9,7 +11,7 @@ import Text.Parsec.Combinator (many1, sepBy1, between, manyTill)
 import Control.Applicative ((<$>), (<$), (<*>), (<*), (*>), (<|>), Applicative, many)
 import Data.Char (digitToInt)
 
-err = "An error has occurred"
+err = "Parsing error has occurred."
 
 keywords = ["if", "fi", "then", "else"]
 
@@ -164,3 +166,8 @@ cbp = try ifThenElseParser <|> ifParser
 -- TLExpr parser, tries to parse a comment, conditional branch or a command
 tle :: Parser TLExpr
 tle = (skipMany (token comment)) *> (try (TLCnd <$> cbp) <|> (TLCmd <$> cmd)) <* (skipMany (token comment))
+
+parseToTLExpr :: String -> [TLExpr]
+parseToTLExpr s = case  betterParse (many tle) s of
+  Right s -> s
+  Left  _ -> error err
