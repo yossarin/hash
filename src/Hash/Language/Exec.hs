@@ -2,7 +2,7 @@ module Hash.Language.Exec where
 
 import qualified Data.Map as M
 import Hash.Language.Expressions
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust, fromJust)
 
 -- A model of a command which is waiting for arguments and a state to run
 type Command = [String] -> ScriptState -> IO ScriptState
@@ -40,8 +40,22 @@ evalCmd ct ss (Cmd cmdName args inDir outDir isAppend) = do
   let eval = evalExpr (vartable ss)
   let name = eval cmdName
   let cmd  = fromMaybe (error $ "Unknown command '" ++ name ++ "'.") (M.lookup name ct)
-  let ss' = ss { output = ""}
-  printSS =<< cmd (map eval args) ss'
+  -- redirecting input
+  ss' <- if isJust inDir then do
+              file <- readFile . eval $ fromJust inDir
+              return $ ss { output = file} 
+            else return $ ss { output = ""}
+  -- redirecting output
+  if isJust outDir then do
+    let file = eval $ fromJust outDir
+    state <- cmd (map eval args) ss'
+    let out = output state
+    if isAppend then do
+      appendFile file out
+    else writeFile file out
+    return state
+  else do
+    printSS =<< cmd (map eval args) ss'
   
 
 -- Evalate conditional

@@ -4,6 +4,7 @@ import qualified Data.Map as M
 import Hash.Language.Exec
 import System.Directory
 import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
 
 -- A map of (command name, command pairs), used to abstract command
 -- execution and make adding new commands relatively easy
@@ -14,6 +15,10 @@ commands = M.fromList [ ("pwd",    pwd)
                       , ("create", create)
                       , ("ls",     ls)
                       , ("cd",     cd)
+                      , ("mkdir",  mkdir)
+                      , ("rmdir",  rmdir)
+                      , ("cat",    cat)
+                      , ("echo",   echo)
                       ]
 
 {-
@@ -76,6 +81,30 @@ create (f:fs) ss = do
   create fs $ ss { output = o ++ "\nCreated file '" ++ f ++ "'."}
 
 {-
+  Basic directory manipulation commands:
+
+  mv    (move),
+  cpdir (copy),
+  mkdir (make directory),
+  rmdir (remove directory)
+
+  They support both absolute and relative paths.
+-}
+
+mkdir :: Command
+mkdir (dir:[]) ss = createDirectory dir >> (return $ ss { output = o ++ "\nmkdir: Created directory '" ++ dir ++ "' :)" })
+  where o = output ss
+mkdir (dir:dirs) ss = do
+  createDirectory dir
+  mkdir dirs (ss { output = o ++ "\nmkdir: Created directory '" ++ dir ++ "' :)" })
+  where o = output ss
+mkdir _       ss = return $ ss { output = "mkdir: no arguments :(" }
+
+rmdir :: Command
+rmdir (dir:[]) ss = removeDirectory dir >> (return $ ss { output = "rmdir: removed empty directory '" ++ dir ++ "' :)" })
+rmdir _        ss = return $ ss { output = "rmdir: no arguments :(" }
+
+{-
   Basic file system navigation commands:
 
     ls  (list directory contents),
@@ -104,3 +133,35 @@ cd []       ss = do
   home <- getHomeDirectory
   setCurrentDirectory home >> (return $ ss { wd = home })
 cd (dir:[]) ss = setCurrentDirectory dir >> (return $ ss { wd = dir })
+
+{-
+  A basic cat command that dumps the contents of a variable number of files.
+-}
+cat :: Command
+cat []     ss = return ss
+cat (x:xs) ss = do
+  file <- readFile x
+  let o = output ss
+  cat xs $ ss { output = o ++ file}
+
+{-
+  A basic echo command that repeats user input to the screen, replacing any
+  instances of variables with their values.
+-}
+echo :: Command
+echo args ss = return $ ss { output = interpolate vt (head args) ""}
+  where vt = vartable ss
+
+-- Interpolation of variables in strings
+interpolate :: VarTable -> String -> String -> String
+interpolate vt [] acc = acc
+interpolate vt s  acc = interpolate vt rest (acc ++ pre ++ val)
+  where pre  = takeWhile (/= '$') s
+        post = dropWhile (/= '$') s
+        var  = if length post > 0 then head . words $ tail post else ""
+        rest = drop (length var + 1) post
+        val  = lookupVar vt var
+
+-- Returns value of a variable or empty string
+lookupVar :: VarTable -> String -> String
+lookupVar vt v = fromMaybe "" $ M.lookup v vt
