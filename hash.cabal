@@ -5,12 +5,12 @@ name:                hash
 version:             0.1.0.0
 synopsis:            A Haskell-based shell, hash
 -- description:         
--- license:             
--- license-file:        LICENSE
+license:             MIT
+license-file:        LICENSE
 author:              Vlatko Klabucar
 maintainer:          vlatko.klabucar@gmail.com
 -- copyright:           
--- category:            
+category:            Language   
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
