@@ -10,6 +10,7 @@ import Hash.Parsing.HashParser (parseToTLExpr)
 import System.Directory (getCurrentDirectory)
 import qualified Data.Map as M
 import Control.Exception
+import Data.Char (isSpace)
 
 -- The top-level module. Connects parsing to execution and adds interaction
 -- with the user / reading from file.
@@ -36,10 +37,18 @@ flushStr str = putStr str >> hFlush stdout
 readPrompt :: String -> IO String
 readPrompt prompt = flushStr prompt >> getLine
 
+-- Trim spaces
+trim :: String -> String
+trim = f . f
+   where f = reverse . dropWhile isSpace
+
 -- Read Eval Print Loop
 repl :: ScriptState -> String -> IO ()
 repl ss prompt = do
-  line <- readPrompt prompt
+  input <- readPrompt prompt
+  let stripped = trim input
+  let line = if length stripped > 0 then (if last stripped /= ';' then stripped ++ ";" else stripped) else input
+
   case line of
     ":q" -> return ()
     _    -> do
